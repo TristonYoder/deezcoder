@@ -1,0 +1,113 @@
+{ stdenv
+, cacert
+, curl
+, runCommandLocal
+, lib
+, autoPatchelfHook
+, libcxx
+, libGL
+, gcc7
+}:
+
+stdenv.mkDerivation rec {
+  pname = "blackmagic-desktop-video";
+  version = "12.9";  # Adjust this to the correct version you need
+
+  buildInputs = [
+    autoPatchelfHook
+    libcxx
+    libGL
+    gcc7.cc.lib
+  ];
+
+  src = runCommandLocal "${pname}-${version}-src.tar.gz"
+    rec {
+      outputHashMode = "recursive";
+      outputHashAlgo = "sha256";
+      outputHash = "sha256-H7AHD6u8KsJoL+ug3QCqxuPfMP4A0nHtIyKx5IaQkdQ=";
+
+      impureEnvVars = lib.fetchers.proxyImpureEnvVars;
+
+      nativeBuildInputs = [ curl ];
+
+      SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+
+      DOWNLOADID = "495ebc707969447598c2f1cf0ff8d7d8";
+      REFERID = "6e65a87d97bd49e1915c57f8df255f5c";
+      SITEURL = "https://www.blackmagicdesign.com/api/register/us/download/${DOWNLOADID}";
+
+      USERAGENT = builtins.concatStringsSep " " [
+        "User-Agent: Mozilla/5.0 (X11; Linux ${stdenv.hostPlatform.linuxArch})"
+        "AppleWebKit/537.36 (KHTML, like Gecko)"
+        "Chrome/77.0.3865.75"
+        "Safari/537.36"
+      ];
+
+      REQJSON = builtins.toJSON {
+        "country" = "nl";
+        "downloadOnly" = true;
+        "platform" = "Linux";
+        "policy" = true;
+      };
+    } ''
+      RESOLVEURL=$(curl \
+        -s \
+        -H "$USERAGENT" \
+        -H 'Content-Type: application/json;charset=UTF-8' \
+        -H "Referer: https://www.blackmagicdesign.com/support/download/$REFERID/Linux" \
+        --data-ascii "$REQJSON" \
+        --compressed \
+        "$SITEURL")
+
+      curl \
+        --retry 3 --retry-delay 3 \
+        --compressed \
+        "$RESOLVEURL" \
+        > $out
+    '';
+
+  # Unpacking the source tarball
+  unpackPhase = ''
+    tar xfz $src    # List the extracted files
+    echo "Extracted files:"
+    ls -a
+    echo END OF ls -a
+    # If the extracted directory has a different name, adjust this line
+    cd Blackmagic_Desktop_Video_Linux_${version} || { echo "Directory not found"; exit 1; }
+  '';
+
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p $out/{bin,share/doc,lib/systemd/system}
+
+    # Copy files for the desktop video application
+    cp -r deb/x86_64/desktopvideo_*.deb $out/share/doc/
+    cp -r deb/x86_64/desktopvideo-gui_*.deb $out/share/doc/
+    cp -r deb/x86_64/mediaexpress_*.deb $out/share/doc/
+
+    # Install binaries
+    cp deb/x86_64/desktopvideo_*.deb $out/bin/
+    cp deb/x86_64/desktopvideo-gui_*.deb $out/bin/
+    cp deb/x86_64/mediaexpress_*.deb $out/bin/
+
+    # Install systemd service files if they exist
+    if [ -f "usr/lib/systemd/system/DesktopVideoHelper.service" ]; then
+      cp usr/lib/systemd/system/DesktopVideoHelper.service $out/lib/systemd/system/
+    fi
+
+    if [ -f "usr/lib/systemd/system/DesktopVideoGui.service" ]; then
+      cp usr/lib/systemd/system/DesktopVideoGui.service $out/lib/systemd/system/
+    fi
+
+    runHook postInstall
+  '';
+
+  meta = with lib; {
+    homepage = "https://www.blackmagicdesign.com/support/family/capture-and-playback";
+    maintainers = [ maintainers.hexchen ];
+    license = licenses.unfree;
+    description = "Supporting applications for Blackmagic Decklink. Includes both the helper and GUI.";
+    platforms = platforms.linux;
+  };
+}

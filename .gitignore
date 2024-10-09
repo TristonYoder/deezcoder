@@ -1,0 +1,41 @@
+*.a
+*.o
+*.o.tmp
+*.so
+*.dylib
+*.dll
+*.exe
+*.dep
+*~
+*.pc
+*.plist
+
+# GNU Global
+GPATH
+GRTAGS
+GSYMS
+GTAGS
+
+# ccls
+/.ccls-cache
+
+# auto-generated compilation database
+compile_commands.json
+*.compile_commands.json
+
+nix-rust/target
+
+result
+result-*
+
+# IDE
+.vscode/
+.idea/
+
+.pre-commit-config.yaml
+
+# clangd and possibly more
+.cache/
+
+# Mac OS
+.DS_Store
